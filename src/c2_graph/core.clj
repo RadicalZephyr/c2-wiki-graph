@@ -1,20 +1,59 @@
 (ns c2-graph.core
-  (:require [clojure.java.io :as io]
+  (:require [clojure.repl :refer :all]
+            [clojure.java.io :as io]
             [net.cgrand.enlive-html :as html]
             [edgewise.core :as edgewise]))
 
 (defn get-c2-pages-seq []
-  (-> "pages"
-      io/resource
+  (-> (io/resource "pages")
       io/as-file
       file-seq))
+
+(defn as-path [file-able]
+  (.toPath (io/as-file file-able)))
+
+(defn as-absolute-path [file-able]
+  (.toAbsolutePath (as-path file-able)))
+
+(defn absolute-resources-dir []
+  (.toPath (.getAbsoluteFile (io/as-file "resources"))))
 
 (defn relative-to [root-file-path]
   (fn [page-path]
     (.relativize root-file-path page-path)))
 
-(defn transduce-files [root-file-path]
-  (->
-   (filter (complement (memfn isDirectory)))
-   (map (memfn toPath))
-   (map (relative-to root-file-path))))
+(defn extract-url [{{link :href} :attrs}]
+  link)
+
+(defn wiki-url? [url]
+  (boolean (re-find #"^wiki\?" url)))
+
+(defn extract-links [parsed-html]
+  (html/select parsed-html [:a]))
+
+(defn get-link-name [link-href]
+  (second (re-find #"^wiki\?(.*)$" link-href)))
+
+(defn get-all-link-names [parsed-html]
+  (->> (extract-links parsed-html)
+       (map extract-url)
+       (filter wiki-url?)
+       (map get-link-name)))
+
+(def c2-pages (get-c2-pages-seq))
+
+(def h (html/html-resource "pages/AalbertTorsius"))
+
+(defn page->link-data [page-name]
+  {:page-name page-name
+   :links (get-all-link-names (html/html-resource page-name))})
+
+(defn make-file-transform [root-file-path]
+  (comp (filter (complement (memfn isDirectory)))
+        (map (memfn toPath))
+        (map (relative-to root-file-path))
+        (map (memfn toString))
+        (map page->link-data)))
+
+(defn combine-page-maps [accumulator page-map]
+  (assoc accumulator (:page-name page-map) (:links page-map)))
