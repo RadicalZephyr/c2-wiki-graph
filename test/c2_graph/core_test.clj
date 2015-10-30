@@ -50,13 +50,17 @@
          ((relative-to (absolute-resources-dir))
           (as-absolute-path "resources/pages/TestPath")))))
 
+(deftest test-get-edges
+  (is (= [["Test" "One"] ["Test" "Two"]]
+         (get-edges "Test" ["One" "Two"]))))
+
 (deftest test-combine-page-maps
   (is (= {"TestPage" ["LinkOne" "LinkTwo"]}
          (combine-page-maps {}
-                            {:page-name "TestPage"
+                            {:page-name "pages/TestPage"
                              :links ["LinkOne" "LinkTwo"]})))
   (is (= {"TestOne" [1 2]
           "TestTwo" [3 4]}
          (combine-page-maps {"TestOne" [1 2]}
-                            {:page-name "TestTwo"
+                            {:page-name "pages/TestTwo"
                              :links [3 4]}))))

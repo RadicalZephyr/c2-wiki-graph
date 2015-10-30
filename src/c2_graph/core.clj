@@ -2,7 +2,8 @@
   (:require [clojure.repl :refer :all]
             [clojure.java.io :as io]
             [net.cgrand.enlive-html :as html]
-            [edgewise.core :as edgewise]))
+            [edgewise.core :as edgewise]
+            [edgewise.tgf :as tgf]))
 
 (defn get-c2-pages-seq []
   (-> (io/resource "pages")
@@ -42,7 +43,7 @@
 
 (def c2-pages (get-c2-pages-seq))
 
-(def h (html/html-resource "pages/AalbertTorsius"))
+;; (def h (html/html-resource "pages/AalbertTorsius"))
 
 (defn page->link-data [page-name]
   {:page-name page-name
@@ -55,5 +56,48 @@
         (map (memfn toString))
         (map page->link-data)))
 
+(defn get-page-name [page-path]
+  (second (re-find #"^pages\/(.*)$" page-path)))
+
 (defn combine-page-maps [accumulator page-map]
-  (assoc accumulator (:page-name page-map) (:links page-map)))
+  (assoc accumulator (get-page-name (:page-name page-map)) (:links page-map)))
+
+(defn make-pages-map [files]
+  (transduce (make-file-transform (absolute-resources-dir))
+             combine-page-maps
+             {}
+             files))
+
+(defn relative-file-names [files-list]
+  (->>
+    files-list
+    (filter (complement (memfn isDirectory)))
+    (map (memfn toPath))
+    (map (relative-to (absolute-resources-dir)))
+    (map (memfn toString))))
+
+(def page-file-names
+  (reduce combine-page-maps
+          {}
+          (relative-file-names
+            (take 100 (get-c2-pages-seq)))))
+
+(defn populate-nodes [g [node list-of-nodes]]
+  (reduce #(edgewise/add-vertex %1 %2) g (conj list-of-nodes node)))
+
+(defn get-edges [starting-node list-of-nodes]
+  (for [node list-of-nodes]
+    [starting-node node]))
+
+(defn populate-edges [g [node list-of-nodes]]
+  (reduce (fn [g [n1 n2]] (edgewise/add-edge g n1 n2)) g
+          (get-edges node list-of-nodes)))
+
+(defn make-graph [page]
+  (-> (edgewise/empty-graph)
+    (populate-nodes page)
+    (populate-edges page)))
+
+
+(defn generate-tgf-graph [g name]
+  (spit (str "graphs/" name) (tgf/->tgf g) ))
